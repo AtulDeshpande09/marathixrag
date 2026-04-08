@@ -14,19 +14,41 @@ TARGET_ARTICLES = 100
 BASE_DIR = "data/raw"
 
 
+import requests
+
+import requests
+
 def get_random_title(lang):
-    """Fetch random Wikipedia page title"""
+    """Fetch random Wikipedia title safely"""
 
     url = f"https://{lang}.wikipedia.org/api/rest_v1/page/random/summary"
 
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json"
+    }
+
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=10
+        )
+
+        if response.status_code == 403:
+            print(f"[{lang}] Blocked (403). Retrying...")
+            return None
+
+        if response.status_code != 200:
+            print(f"[{lang}] HTTP Error:", response.status_code)
+            return None
+
         data = response.json()
 
-        return data.get("title", None)
+        return data.get("title")
 
-    except Exception as e:
-        print(f"[{lang}] Random fetch failed:", e)
+    except requests.exceptions.RequestException as e:
+        print(f"[{lang}] Request failed:", e)
         return None
 
 
@@ -67,6 +89,7 @@ def collect_language(lang):
     print(f"\nStarting collection for: {lang}")
 
     wiki = wikipediaapi.Wikipedia(
+        user_agent = "mragdata (redashcatch@gmail.com)",
         language=lang,
         extract_format=wikipediaapi.ExtractFormat.WIKI
     )
