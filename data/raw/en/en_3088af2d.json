@@ -1,0 +1,26 @@
+{
+  "article_id": "en_3088af2d",
+  "language": "en",
+  "title": "Seahorse (software)",
+  "wikipedia_page_id": 2071353,
+  "url": "https://en.wikipedia.org/wiki/Seahorse_(software)",
+  "passages": [
+    "Seahorse (officially branded as Passwords and Secrets) is a GNOME front-end application for managing passwords, PGP and SSH keys. Seahorse integrates with a number of apps including Nautilus file manager, Epiphany browser and Evolution e-mail suite. It has HKP and LDAP key server support.",
+    "PGP support is implemented utilizing GNU Privacy Guard. Passwords are securely stored encrypted with the user's login password using GNOME Keyring. Seahorse is released as free software under the GPL-2.0-or-later license.",
+    "Developers",
+    "Responsibility for maintenance and development of Seahorse has changed hands several times during its lifetime:",
+    "Niels De Graef (3.29.x - present)",
+    "Daiki Ueno (3.29.x - present)",
+    "Nate Nielsen (real name Stef Walter) (0.7.4 - present)",
+    "Jacob Perkins (0.6.x - 0.7.3)",
+    "Jose C. García Sogo (0.5.x)",
+    "Jean Schurger",
+    "See also",
+    "List of password managers",
+    "GNOME Keyring",
+    "References",
+    "External links",
+    "Official website",
+    "Seahorse repository on GNOME GitLab"
+  ]
+}
