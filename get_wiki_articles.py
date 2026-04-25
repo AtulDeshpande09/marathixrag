@@ -6,10 +6,10 @@ import uuid
 import time
 
 # Languages
-LANGUAGES = ["en", "hi"]
+LANGUAGES = ["hi" , "en"]
 
 # Target articles per language
-TARGET_ARTICLES = 100
+TARGET_ARTICLES = 500
 
 BASE_DIR = "data/raw"
 
@@ -141,7 +141,7 @@ def collect_language(lang):
             )
 
             # Small delay to avoid API overload
-            time.sleep(0.5)
+            time.sleep(9)
 
         except Exception as e:
 
