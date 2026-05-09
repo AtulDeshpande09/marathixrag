@@ -1,5 +1,5 @@
+from FlagEmbedding import BGEM3FlagModel
 import json
-from sentence_transformers import SentenceTransformer
 import chromadb
 import pathlib
 
@@ -18,8 +18,9 @@ with open(input_file, 'r') as f:
         metadatas.append(data['metadata'])
 
 # Batch Embedding (Fastest way)
-model = SentenceTransformer('all-MiniLM-L6-v2')
-embeddings = model.encode(texts, show_progress_bar=True)
+model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True) 
+embeddings = model.encode(texts, batch_size=12, max_length=8192)['dense_vecs']
+
 
 # Bulk Add to ChromaDB
 client = chromadb.PersistentClient(path=db)
