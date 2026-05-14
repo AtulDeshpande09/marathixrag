@@ -18,33 +18,37 @@ collection = client.get_collection(name="my_chunks")
 with open(QUESTIONS_FILE, 'r', encoding='utf-8') as f:
     for line in f:
         data = json.loads(line.strip())
-        target_filename = data["filename"] # e.g., "en_010148f3.json"
+        target_filename = data["filename"]  # e.g., "en_010148f3.json"
         
-        marathi_block = data.get("questions_marathi", "")
-        questions = [q.strip() for q in marathi_block.split('\n') if q.strip()]
+        # FIX: Grab the whole block as ONE single unified query text string
+        query_text = data.get("questions_marathi", "").strip()
         
-        for query_text in questions:
-            total_queries += 1
+        # Ensure we don't process empty rows
+        if not query_text:
+            continue
             
-            # Generate the matching dense vector format
-            query_output = model.encode([query_text], batch_size=1, max_length=512)
-            query_vector = query_output['dense_vecs'][0].tolist()
-            
-            # Query Chroma with the vector
-            search_results = collection.query(
-                query_embeddings=[query_vector],
-                n_results=K_VALUE
-            )
-            
-            # Parse the metadata list
-            retrieved_metadatas = search_results["metadatas"][0]
-            matched_source_files = [meta["source_file"] for meta in retrieved_metadatas]
-            
-            # Validate matching file context
-            is_hit = any(target_filename in source_path for source_path in matched_source_files)
-            
-            if is_hit:
-                successful_hits += 1
+        total_queries += 1
+        
+        # 1. Generate the matching dense vector for the whole block
+        query_output = model.encode([query_text], batch_size=1, max_length=512)
+        query_vector = query_output['dense_vecs'].tolist()
+        
+        # 2. Query Chroma with the unified vector
+        search_results = collection.query(
+            query_embeddings=[query_vector],
+            n_results=K_VALUE
+        )
+        
+        # 3. Parse the metadata output
+        # Because we only passed 1 query, we grab the first element index [0]
+        retrieved_metadatas = search_results["metadatas"][0]
+        matched_source_files = [meta["source_file"] for meta in retrieved_metadatas]
+        
+        # 4. Check if the target filename is inside the retrieved paths
+        is_hit = any(target_filename in source_path for source_path in matched_source_files)
+        
+        if is_hit:
+            successful_hits += 1
 
 # Calculate final metrics
 if total_queries > 0:
