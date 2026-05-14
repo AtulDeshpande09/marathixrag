@@ -31,7 +31,7 @@ with open(QUESTIONS_FILE, 'r', encoding='utf-8') as f:
         
         # 1. Generate the matching dense vector for the whole block
         query_output = model.encode([query_text], batch_size=1, max_length=512)
-        query_vector = query_output['dense_vecs'].tolist()
+        query_vector = query_output['dense_vecs'][0].tolist()
         
         # 2. Query Chroma with the unified vector
         search_results = collection.query(
