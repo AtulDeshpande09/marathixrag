@@ -6,6 +6,17 @@ MarathiXRAG enables users to ask questions in **Marathi** and retrieve semantica
 
 ---
 
+## Demo (Gradio) :
+
+
+
+https://github.com/user-attachments/assets/280361bf-bc93-4490-9fef-6e7b20884481
+
+
+
+
+---
+
 ## ✨ Features
 
 * 🔍 Cross-lingual semantic retrieval
