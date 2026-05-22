@@ -1,4 +1,8 @@
-# 🌐 MarathiXRAG
+# MarathiXRAG
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20335919.svg)](https://doi.org/10.5281/zenodo.20335919)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 
 > Cross-lingual Retrieval-Augmented Generation (RAG) for Marathi queries using English and Hindi Wikipedia corpora.
 
