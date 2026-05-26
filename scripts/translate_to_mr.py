@@ -2,60 +2,56 @@ import json
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# 1. Setup
-model_id = "sarvamai/sarvam-translate"
-INPUT_FILE = "generated_questions.jsonl"
-FINAL_OUTPUT = "marathi_questions.jsonl"
+MODEL_ID = "sarvamai/sarvam-translate"
+INPUT_FILE = "../data/processed/questions_EN.jsonl"   # From generate_questions.py
+OUTPUT_FILE = "../data/processed/questions_MR.jsonl"  # Minimal Marathi output
 
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+print(f"Loading {MODEL_ID}...")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 model = AutoModelForCausalLM.from_pretrained(
-    model_id, 
-    device_map="auto", 
-    torch_dtype=torch.bfloat16
+    MODEL_ID,
+    device_map="auto",
+    torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 )
+model.eval()
 
-def translate_to_marathi(text):
-    # Official Sarvam-translate chat-style prompt
+def translate(text):
+    """Simple English → Marathi translation."""
     messages = [
-        {"role": "system", "content": "Translate the text below to Marathi. Preserve the 'Question (Answer)' format strictly."},
+        {"role": "system", "content": "Translate to Marathi. Output only the translation."},
         {"role": "user", "content": text}
     ]
-
-    text_input = tokenizer.apply_chat_template(
-        messages, 
-        tokenize=False, 
-        add_generation_prompt=True
-    )
-
-    model_inputs = tokenizer([text_input], return_tensors="pt").to(model.device)
-
+    input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    model_inputs = tokenizer([input_text], return_tensors="pt").to(model.device)
+    
     with torch.no_grad():
-        generated_ids = model.generate(
-            **model_inputs,
-            max_new_tokens=1024,
-            do_sample=True,
-            temperature=0.01, # Keep it low for structural consistency
-            num_return_sequences=1
-        )
+        output = model.generate(**model_inputs, max_new_tokens=256, temperature=0.01, do_sample=True, pad_token_id=tokenizer.eos_token_id)
     
-    # Slice to get only the generated part
-    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):]
-    return tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+    result = output[0][len(model_inputs.input_ids[0]):]
+    return tokenizer.decode(result, skip_special_tokens=True).strip()
 
-# 2. Loop through your English JSONL
-with open(INPUT_FILE, "r", encoding="utf-8") as in_f, \
-     open(FINAL_OUTPUT, "w", encoding="utf-8") as out_f:
+print(f"Translating {INPUT_FILE} → {OUTPUT_FILE}\n")
+
+with open(INPUT_FILE, "r", encoding="utf-8") as infile, \
+     open(OUTPUT_FILE, "w", encoding="utf-8") as outfile:
     
-    for line in in_f:
-        data = json.loads(line)
-        eng_content = data.get("questions", "")
+    for i, line in enumerate(infile, 1):
+        record = json.loads(line.strip())
         
-        if eng_content:
-            print(f"Translating questions from {data['filename']}...")
-            marathi_text = translate_to_marathi(eng_content)
+        if "question" in record and "chunk_id" in record:
+            print(f"[{i}] {record['chunk_id']}")
             
-            # Save both English and Marathi together
-            data["questions_marathi"] = marathi_text
-            out_f.write(json.dumps(data, ensure_ascii=False) + "\n")
+            # Minimal output: no English question, just Marathi + answer + metadata
+            minimal_record = {
+                "chunk_id": record["chunk_id"],              # ← Key to retrieve English later
+                "marathi_question": translate(record["question"]),
+                "answer": record["answer"],                  # Keep answer in English (dates/names)
+                "source": record.get("source", {})           # Preserve metadata for sorting
+            }
+            
+            outfile.write(json.dumps(minimal_record, ensure_ascii=False) + "\n")
+            
+            if i % 20 == 0:
+                torch.cuda.empty_cache()
 
-print(f"Translation complete! Results saved in {FINAL_OUTPUT}")
+print(f"✅ Done! Minimal output saved to {OUTPUT_FILE}")
