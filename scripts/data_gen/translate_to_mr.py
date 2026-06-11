@@ -7,8 +7,8 @@ from transformers import AutoTokenizer
 # 1. CONFIGURATION
 # ─────────────────────────────────────────────────────────────
 MODEL_ID = "sarvamai/sarvam-translate"
-INPUT_FILE = "../data/processed/questions/questions_EN.jsonl"   
-OUTPUT_FILE = "../data/processed/questions/questions_MR.jsonl"  
+INPUT_FILE = ".../data/processed/questions/questions_EN.jsonl"   
+OUTPUT_FILE = ".../data/processed/questions/questions_MR.jsonl"  
 BATCH_SIZE = 1000  
 
 def main():

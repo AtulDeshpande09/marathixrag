@@ -7,8 +7,8 @@ from transformers import AutoTokenizer
 # 1. CONFIGURATION
 # ─────────────────────────────────────────────────────────────
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct-AWQ"
-INPUT_FILE = "../data/processed/chunks_final.jsonl"
-OUTPUT_FILE = "../data/processed/questions/questions_EN.jsonl"
+INPUT_FILE = ".../data/processed/chunks_final.jsonl"
+OUTPUT_FILE = ".../data/processed/questions/questions_EN.jsonl"
 MIN_CHUNK_LEN = 30
 MAX_CHUNK_LEN = 2500
 MAX_NEW_TOKENS = 256

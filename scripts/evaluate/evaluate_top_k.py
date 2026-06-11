@@ -12,7 +12,7 @@ successful_hits = 0
 model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True) 
 
 # Initialize Chroma Native Client
-client = chromadb.PersistentClient(path="chroma")
+client = chromadb.PersistentClient(path=".../chroma")
 collection = client.get_collection(name="my_chunks")
 
 with open(QUESTIONS_FILE, 'r', encoding='utf-8') as f:
