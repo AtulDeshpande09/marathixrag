@@ -9,7 +9,7 @@ from sentence_transformers.training_args import SentenceTransformerTrainingArgum
 # ─────────────────────────────────────────────────────────────
 MODEL_ID = "BAAI/bge-m3"
 TRAIN_FILE = "../data/experiment_splits/train_pairs_MR.jsonl"
-OUTPUT_MODEL_DIR = "../data/models/bge-m3-ft-marathi"
+OUTPUT_MODEL_DIR = "../models/bge-m3-ft-marathi"
 
 def load_jsonl_to_dataset(file_path):
     """Loads JSONL train rows and formats them into HF Dataset keys."""
