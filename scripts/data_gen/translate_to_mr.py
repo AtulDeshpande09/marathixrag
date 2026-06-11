@@ -7,8 +7,8 @@ from transformers import AutoTokenizer
 # 1. CONFIGURATION
 # ─────────────────────────────────────────────────────────────
 MODEL_ID = "sarvamai/sarvam-translate"
-INPUT_FILE = ".../data/processed/questions/questions_EN.jsonl"   
-OUTPUT_FILE = ".../data/processed/questions/questions_MR.jsonl"  
+INPUT_FILE = "../../data/processed/questions/questions_EN.jsonl"   
+OUTPUT_FILE = "../../data/processed/questions/questions_MR.jsonl"  
 BATCH_SIZE = 1000  
 
 def main():
@@ -58,7 +58,7 @@ def main():
             batch_records = valid_records[i:i + BATCH_SIZE]
             
             print(f" -> Processing translation batch {i // BATCH_SIZE + 1} (Items {i} to {min(i + BATCH_SIZE, total_records)})...")
-            outputs = llm.generate(batch_prompts, sampling_params, display_progress=False)
+            outputs = llm.generate(batch_prompts, sampling_params, use_tqdm=True)
 
             for idx, output in enumerate(outputs):
                 translated_text = output.outputs[0].text.strip()

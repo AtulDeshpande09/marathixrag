@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 
 class ExperimentLogger:
-    def __init__(self, exp_name, out_dir=".../experiments"):
+    def __init__(self, exp_name, out_dir="../../experiments"):
         os.makedirs(out_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.path = os.path.join(out_dir, f"{exp_name}_{timestamp}.txt")

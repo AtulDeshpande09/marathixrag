@@ -36,23 +36,34 @@ def main():
 
     print("Step 2: Loading Base BGE-M3 model weights...")
     model = SentenceTransformer(MODEL_ID)
+    
+    # FIX 1: Set max sequence length on the model instance
+    model.max_seq_length = 512  
+
+    # FIX 2: Explicitly enable gradient checkpointing on the underlying PyTorch module
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
 
     # MultipleNegativesRankingLoss sets up infoNCE optimization across the hardware batch.
-    # It pulls Marathi queries and English source chunks together in cross-lingual space, 
-    # treating other parallel items inside the batch as in-batch negative distractions.
     train_loss = losses.MultipleNegativesRankingLoss(model)
 
     print("Step 3: Setting up training hyper-parameters...")
     training_args = SentenceTransformerTrainingArguments(
         output_dir=OUTPUT_MODEL_DIR,
-        num_train_epochs=3,                  # 3 epochs provides excellent cross-lingual adaptation
-        per_device_train_batch_size=32,      # Ideal scale for 24GB VRAM cards (RTX 3090 / 4090)
-        learning_rate=2e-5,                  # Small LR ensures basic multilingual capability isn't broken
+        num_train_epochs=3,                  
+        per_device_train_batch_size=16,      # Lowered from 32 to 16 to drastically reduce baseline VRAM load
+        learning_rate=2e-5,                  
         warmup_ratio=0.1,
         weight_decay=0.01,
         logging_steps=50,
         save_strategy="epoch",
-        fp16=True,                           # Maximizes training speed on hardware tensor cores
+        fp16=True,                           
+        
+        # ─────────────────────────────────────────────────────────────
+        # CRITICAL MEMORY OPTIMIZATIONS FOR 24GB VRAM
+        # ─────────────────────────────────────────────────────────────
+        gradient_checkpointing=True,         # Recomputes activations during backward pass to save ~60% VRAM
+        dataloader_num_workers=2             # Smooths out data delivery from CPU to GPU
     )
 
     print("Step 4: Bootstrapping training framework loop...")

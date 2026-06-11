@@ -6,10 +6,10 @@ from collections import defaultdict
 # ─────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────
-EN_QUESTIONS_FILE = ".../data/processed/questions/questions_EN.jsonl"
-MR_QUESTIONS_FILE = ".../data/processed/questions/questions_MR.jsonl"
-CHUNKS_FILE = ".../data/processed/chunks_final.jsonl"
-OUTPUT_DIR = ".../data/experiment_splits/"
+EN_QUESTIONS_FILE = "../../data/processed/questions/questions_EN.jsonl"
+MR_QUESTIONS_FILE = "../../data/processed/questions/questions_MR.jsonl"
+CHUNKS_FILE = "../../data/processed/chunks_final.jsonl"
+OUTPUT_DIR = "../../data/experiment_splits/"
 TRAIN_RATIO = 0.80
 SEED = 42
 

@@ -4,24 +4,24 @@ import numpy as np
 import pytrec_eval
 import chromadb
 from FlagEmbedding import BGEM3FlagModel
-
-# Import your logger class
-from logger_util import ExperimentLogger
+from logger import ExperimentLogger
 
 # ─────────────────────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────
-MODEL_PATH = "BAAI/bge-m3"  # Will point to local directory for FT run later
-EVAL_DIR = ".../data/experiment_splits/"
-CHROMA_DB_PATH = ".../chroma"
-COLLECTION_NAME = "my_chunks"
+MODEL_PATH = "../../models/bge-m3-ft-marathi"  
+EVAL_DIR = "../../data/experiment_splits/"
+CHROMA_DB_PATH = "../../chroma_clean"
+COLLECTION_NAME = "my_chunks_clean"
+
+K_LIST = [1, 3, 5, 10]
+MAX_K = max(K_LIST)
 
 def load_json(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def load_qrels_tsv(file_path):
-    """Parses standard multi-graded TSV file into pytrec_eval dictionary structure."""
     qrels = {}
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -32,101 +32,77 @@ def load_qrels_tsv(file_path):
                 qrels[qid][doc_id] = int(rel)
     return qrels
 
-def evaluate_scenario(model, queries_dict, qrels, collection, top_k=5):
-    """Runs parallel verification loops using your FlagEmbedding vector strategy."""
+def evaluate_scenario(model, queries_dict, qrels, collection):
     run_results = {}
     
     q_ids = list(queries_dict.keys())
     q_texts = list(queries_dict.values())
     
-    print(f" -> Processing {len(q_texts)} sequences using FlagEmbedding...")
-    
-    # Utilizing your precise FlagEmbedding call layout
-    # Running as a whole-array batch is significantly faster than single-line loops
+    print(f" -> Encoding {len(q_texts)} queries...")
     embeddings_output = model.encode(q_texts, batch_size=32, max_length=512)
-    dense_vectors = embeddings_output['dense_vecs']
+    query_vectors_list = [vec.tolist() for vec in embeddings_output['dense_vecs']]
     
-    print(" -> Scanning ChromaDB indices...")
-    # Convert numpy output collection array to plain lists for Chroma compliance
-    query_vectors_list = [vec.tolist() for vec in dense_vectors]
+    print(f" -> Index scan for Top-{MAX_K} matches...")
+    results = collection.query(query_embeddings=query_vectors_list, n_results=MAX_K)
     
-    results = collection.query(
-        query_embeddings=query_vectors_list,
-        n_results=top_k
-    )
-    
-    # Process outputs into pytrec_eval matching keys
+    # Standard clean IR parsing: IDs map 1:1 natively!
     for idx, qid in enumerate(q_ids):
         run_results[qid] = {}
         retrieved_ids = results["ids"][idx]
         distances = results["distances"][idx] if "distances" in results else [1.0] * len(retrieved_ids)
         
         for doc_id, dist in zip(retrieved_ids, distances):
-            # Normalize distances to ascending similarity rankings
             similarity_score = 1.0 / (1.0 + dist)
             run_results[qid][doc_id] = float(similarity_score)
             
-    # Calculate your strict and soft publication-ready metrics
-    evaluator = pytrec_eval.RelevanceEvaluator(
-        qrels, {'ndcg_cut_5', 'map', 'recip_rank', 'success_1', 'success_3', 'success_5'}
-    )
+    # Compute standard academic metrics
+    metric_measures = {'map', 'recip_rank'}
+    for k in K_LIST:
+        metric_measures.add(f'success_{k}')
+        metric_measures.add(f'ndcg_cut_{k}')
+        
+    evaluator = pytrec_eval.RelevanceEvaluator(qrels, metric_measures)
     scores = evaluator.evaluate(run_results)
     
-    metrics = {
-        "Top-1 Accuracy": np.mean([q["success_1"] for q in scores.values()]),
-        "Top-3 Accuracy": np.mean([q["success_3"] for q in scores.values()]),
-        "Top-5 Accuracy": np.mean([q["success_5"] for q in scores.values()]),
-        "MRR": np.mean([q["recip_rank"] for q in scores.values()]),
-        "NDCG@5": np.mean([q["ndcg_cut_5"] for q in scores.values()]),
-        "MAP": np.mean([q["map"] for q in scores.values()]),
-    }
+    metrics = {}
+    for k in K_LIST:
+        metrics[f"Top-{k} Accuracy"] = np.mean([q[f"success_{k}"] for q in scores.values()])
+        metrics[f"NDCG@{k}"] = np.mean([q[f"ndcg_cut_{k}"] for q in scores.values()])
+    metrics["MRR"] = np.mean([q["recip_rank"] for q in scores.values()])
+    metrics["MAP"] = np.mean([q["map"] for q in scores.values()])
+    
     return metrics
 
 def main():
-    # Instantiate your custom logger
-    logger = ExperimentLogger(exp_name="BGE-M3_Native_Baseline")
-    logger.log(f"Initializing Native FlagEmbedding Verification Loop for: {MODEL_PATH}")
+    logger = ExperimentLogger(exp_name="BGE-M3_Fine_Tuned")
+    logger.log(f"Running Clean Multi-K Evaluation for: {MODEL_PATH}")
     
-    print("Step 1: Instantiating persistent Chroma Client...")
     client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     collection = client.get_collection(name=COLLECTION_NAME)
     
-    print("Step 2: Loading query maps and truth qrels records...")
     queries_en = load_json(os.path.join(EVAL_DIR, "eval_queries_EN.json"))
     queries_mr = load_json(os.path.join(EVAL_DIR, "eval_queries_MR.json"))
     qrels_en = load_qrels_tsv(os.path.join(EVAL_DIR, "qrels_EN.tsv"))
     qrels_mr = load_qrels_tsv(os.path.join(EVAL_DIR, "qrels_MR.tsv"))
 
-    print("Step 3: Loading original weights using native library...")
-    # Matches your exact configuration flag parameters
     model = BGEM3FlagModel(MODEL_PATH, use_fp16=True)
 
-    # ─────────────────────────────────────────────────────────────
-    # EXECUTE BASE-ENGLISH (EN -> EN)
-    # ─────────────────────────────────────────────────────────────
+    # SCENARIO 1: EN -> EN
     logger.section("SCENARIO 1: BASE-ENGLISH (EN -> EN)")
-    print("\nRunning Base-English Evaluation...")
-    metrics_en = evaluate_scenario(model, queries_en, qrels_en, collection, top_k=K_VALUE)
-    for m_name, val in metrics_en.items():
-        logger.log(f"{m_name}: {val:.4f}")
+    metrics_en = evaluate_scenario(model, queries_en, qrels_en, collection)
+    for m_name, val in metrics_en.items(): logger.log(f"{m_name}: {val:.4f}")
 
-    # ─────────────────────────────────────────────────────────────
-    # EXECUTE BASE-MARATHI (MR -> EN)
-    # ─────────────────────────────────────────────────────────────
+    # SCENARIO 2: MR -> EN
     logger.section("SCENARIO 2: BASE-MARATHI (MR -> EN)")
-    print("\nRunning Base-Marathi Evaluation...")
-    metrics_mr = evaluate_scenario(model, queries_mr, qrels_mr, collection, top_k=K_VALUE)
-    for m_name, val in metrics_mr.items():
-        logger.log(f"{m_name}: {val:.4f}")
+    metrics_mr = evaluate_scenario(model, queries_mr, qrels_mr, collection)
+    for m_name, val in metrics_mr.items(): logger.log(f"{m_name}: {val:.4f}")
 
-    # Output consolidated summary matrix text block
-    logger.section("FINAL BASELINE RESULTS MATRIX")
-    logger.log(f"{'Evaluation Metric':<20} | {'Base-English':<15} | {'Base-Marathi':<15}")
-    logger.log("-" * 60)
-    for metric in metrics_en.keys():
-        logger.log(f"{metric:<20} | {metrics_en[metric]:<15.4f} | {metrics_mr[metric]:<15.4f}")
-
-    print(f"\n✅ Native evaluation pipeline completed. Metrics written securely to experimental log logs.")
+    # Final Matrix Print
+    logger.section("FINAL RESULTS MATRIX")
+    logger.log(f"{'Evaluation Metric':<25} | {'Base-English':<15} | {'Base-Marathi':<15}")
+    logger.log("-" * 65)
+    for m in metrics_en.keys():
+        logger.log(f"{m:<25} | {metrics_en[m]:<15.4f} | {metrics_mr[m]:<15.4f}")
 
 if __name__ == "__main__":
     main()

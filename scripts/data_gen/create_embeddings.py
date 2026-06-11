@@ -1,62 +1,51 @@
-from FlagEmbedding import BGEM3FlagModel
 import json
 import chromadb
-from pathlib import Path
+from FlagEmbedding import BGEM3FlagModel
 
-texts = []
-metadatas = []
+# Initialize BGE-M3
+model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True)
 
-input_file = "data/processed/chunks.jsonl"
-db = "chroma"
+# Initialize clean Chroma instance
+client = chromadb.PersistentClient(path="../../chroma_clean")
+collection = client.get_or_create_collection(name="my_chunks_clean")
 
-Path("chroma").mkdir(parents=True, exist_ok=True)
+CHUNKS_FILE = "../../data/processed/chunks_final.jsonl"
 
-print("Collecting TEXTs and METADATAs...")
-
-with open(input_file, 'r') as f:
-    for line in f:
-        data = json.loads(line)
-        texts.append(data['text'])
-        metadatas.append(data['metadata'])
-
-print("Done!!!")
-print("--*--*"*5)
-print("Loading Embedding Model...")
-# Batch Embedding (Fastest way)
-model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True) 
-
-print("--*--*"*5)
-print("Creating Vector Embeddings...")
-embeddings = model.encode(texts, batch_size=12, max_length=8192)['dense_vecs']
-print("complete!!!")
-
-# Bulk Add to ChromaDB
-client = chromadb.PersistentClient(path=db)
-collection = client.get_or_create_collection(name="my_chunks")
-
-BATCH_SIZE = 5000
-ids = [f"id_{i}" for i in range(len(texts))]
-
-
-print("")
-print("Adding embeddings to VectorDB...")
-
-
-for i in range(0 , len(ids), BATCH_SIZE):
+print("Indexing collection with clean structural keys...")
+with open(CHUNKS_FILE, "r", encoding="utf-8") as f:
+    batch_texts = []
+    batch_ids = []
+    batch_metadatas = []
     
-    batch_ids = ids[i : i + BATCH_SIZE]
-    batch_embeddings = embeddings[i : i+BATCH_SIZE].tolist()
-    batch_texts = texts[i : i + BATCH_SIZE]
-    batch_metadatas = metadatas[i : i + BATCH_SIZE]
-
-    collection.add(
-            ids=batch_ids,
-            embeddings=batch_embeddings,
-            documents=batch_texts,
-            metadatas=batch_metadatas
+    for line in f:
+        if not line.strip():
+            continue
+        chunk = json.loads(line.strip())
+        
+        batch_texts.append(chunk["text"])
+        batch_ids.append(chunk["chunk_id"]) # Standardizes strict ID matching
+        batch_metadatas.append({
+            "article_id": chunk.get("metadata", {}).get("article_id", ""),
+            "source_file": chunk.get("metadata", {}).get("source_file", "")
+        })
+        
+        # Batch upload to ChromaDB in increments of 128 for stability
+        if len(batch_ids) == 128:
+            outputs = model.encode(batch_texts, batch_size=32, max_length=512)
+            vectors = [vec.tolist() for vec in outputs['dense_vecs']]
+            
+            collection.add(
+                ids=batch_ids,
+                embeddings=vectors,
+                documents=batch_texts,
+                metadatas=batch_metadatas
             )
+            batch_texts, batch_ids, batch_metadatas = [], [], []
 
-    print(f"Uploaded batch {i//BATCH_SIZE + 1} ({len(batch_ids)} items)")
+    # Clear out any remaining items in the buffer
+    if batch_ids:
+        outputs = model.encode(batch_texts, batch_size=32, max_length=512)
+        vectors = [vec.tolist() for vec in outputs['dense_vecs']]
+        collection.add(ids=batch_ids, embeddings=vectors, documents=batch_texts, metadatas=batch_metadatas)
 
-
-print(f"Vector Database Saved at {db}")
+print("✅ ChromaDB rebuilt with exact chunk_id indexing!")
