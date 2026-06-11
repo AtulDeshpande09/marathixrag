@@ -1,57 +1,75 @@
+import os
 import json
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from vllm import LLM, SamplingParams
+from transformers import AutoTokenizer
 
+# ─────────────────────────────────────────────────────────────
+# 1. CONFIGURATION
+# ─────────────────────────────────────────────────────────────
 MODEL_ID = "sarvamai/sarvam-translate"
-INPUT_FILE = "../data/processed/questions_EN.jsonl"   # From generate_questions.py
-OUTPUT_FILE = "../data/processed/questions_MR.jsonl"  # Minimal Marathi output
+INPUT_FILE = "../data/processed/questions/questions_EN.jsonl"   # Input data
+OUTPUT_FILE = "../data/processed/questions/questions_MR.jsonl"  # Output data
 
-print(f"Loading {MODEL_ID}...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID,
-    device_map="auto",
-    torch_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-)
-model.eval()
+def main():
+    if not os.path.exists(INPUT_FILE):
+        print(f"✗ Error: Input file not found: {INPUT_FILE}")
+        return
 
-def translate(text):
-    """Simple English → Marathi translation."""
-    messages = [
-        {"role": "system", "content": "Translate to Marathi. Output only the translation."},
-        {"role": "user", "content": text}
-    ]
-    input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    model_inputs = tokenizer([input_text], return_tensors="pt").to(model.device)
+    print("Step 1: Reading English entries and compiling prompt templates...")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     
-    with torch.no_grad():
-        output = model.generate(**model_inputs, max_new_tokens=256, temperature=0.01, do_sample=True, pad_token_id=tokenizer.eos_token_id)
-    
-    result = output[0][len(model_inputs.input_ids[0]):]
-    return tokenizer.decode(result, skip_special_tokens=True).strip()
+    valid_records = []
+    prompts = []
 
-print(f"Translating {INPUT_FILE} → {OUTPUT_FILE}\n")
+    with open(INPUT_FILE, "r", encoding="utf-8") as infile:
+        for line in infile:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                if "question" in record and "chunk_id" in record:
+                    # Configured using Sarvam's official context structure for high fidelity
+                    messages = [
+                        {"role": "system", "content": "Translate the text below to Marathi."},
+                        {"role": "user", "content": record["question"]}
+                    ]
+                    input_text = tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    prompts.append(input_text)
+                    valid_records.append(record)
+            except Exception as e:
+                print(f"✗ Parsing error on input row: {e}")
 
-with open(INPUT_FILE, "r", encoding="utf-8") as infile, \
-     open(OUTPUT_FILE, "w", encoding="utf-8") as outfile:
+    print(f"✓ Loaded {len(valid_records)} questions to translate.")
     
-    for i, line in enumerate(infile, 1):
-        record = json.loads(line.strip())
-        
-        if "question" in record and "chunk_id" in record:
-            print(f"[{i}] {record['chunk_id']}")
+    print("Step 2: Spinning up the vLLM batch engine...")
+    # Model fits comfortably in VRAM; max context length set to safe 4096 limit
+    llm = LLM(model=MODEL_ID, max_model_len=4096, dtype="bfloat16", gpu_memory_utilization=0.9)
+    sampling_params = SamplingParams(temperature=0.01, max_tokens=256)
+
+    print("Step 3: Launching ultra-fast parallel translation pipeline...")
+    outputs = llm.generate(prompts, sampling_params)
+
+    print("Step 4: Structuring minimal records and writing output...")
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as outfile:
+        for idx, output in enumerate(outputs):
+            translated_text = output.outputs.text.strip()
+            orig_record = valid_records[idx]
             
-            # Minimal output: no English question, just Marathi + answer + metadata
+            # Formats minimal structural record keeping original properties intact
             minimal_record = {
-                "chunk_id": record["chunk_id"],              # ← Key to retrieve English later
-                "marathi_question": translate(record["question"]),
-                "answer": record["answer"],                  # Keep answer in English (dates/names)
-                "source": record.get("source", {})           # Preserve metadata for sorting
+                "chunk_id": orig_record["chunk_id"],
+                "marathi_question": translated_text,
+                "answer": orig_record["answer"],
+                "source": orig_record.get("source", {})
             }
-            
             outfile.write(json.dumps(minimal_record, ensure_ascii=False) + "\n")
-            
-            if i % 20 == 0:
-                torch.cuda.empty_cache()
 
-print(f"✅ Done! Minimal output saved to {OUTPUT_FILE}")
+    print(f"\n✅ Pipeline Complete! Output archived at: {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    main()
