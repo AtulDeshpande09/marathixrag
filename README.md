@@ -154,6 +154,25 @@ An unexpected secondary outcome of this project was extreme cost efficiency, com
 
 ---
 
+## 📦 Open-Source Artifacts & Quickstart
+
+To ensure full reproducibility, both the model weights and the generated synthetic evaluation datasets are openly hosted on the Hugging Face Hub:
+* 🔹 **Fine-Tuned Weights:** [huggingface.co/AtulDeshpande/bge-m3-ft-marathi](https://huggingface.co)
+
+### Direct Inference Snippet
+You can call the fine-tuned bi-encoder model natively using the `FlagEmbedding` library to encode low-resource queries:
+
+```python
+from FlagEmbedding import BGEM3FlagModel
+
+# Instantiates your custom model directly from the cloud hub
+model = BGEM3FlagModel('your_hf_username/bge-m3-ft-marathi', use_fp16=True)
+
+# Encode cross-lingual queries seamlessly
+marathi_query = ["Don Powell चा जन्म केव्हा झाला?"]
+embeddings = model.encode(marathi_query, batch_size=1, max_length=512)
+```
+---
 ## Demo (Gradio) :
 
 
